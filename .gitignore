@@ -490,4 +490,7 @@ fabric.properties
 
 .idea/
 
+# Ignore environment file
+.env
+
 # End of https://www.toptal.com/developers/gitignore/api/dotnetcore,rider,csharp
