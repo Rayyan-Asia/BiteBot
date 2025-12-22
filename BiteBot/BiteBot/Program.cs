@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using BiteBot.Data;
 
 namespace BiteBot;
 
@@ -23,6 +25,18 @@ internal abstract class Program
                 builder.AddConsole();
             })
             .AddSingleton<IConfiguration>(configuration)
+            // Configure EF Core DbContext with PostgreSQL. Expects a connection string named "DefaultConnection" in configuration (e.g., user secrets).
+            .AddDbContext<AppDbContext>((provider, options) =>
+            {
+                var config = provider.GetRequiredService<IConfiguration>();
+                var conn = config.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrWhiteSpace(conn))
+                {
+                    // Fallback: try configuration key directly
+                    conn = config["DefaultConnection"];
+                }
+                options.UseNpgsql(conn);
+            })
             .AddScoped<IBot, Bot>()
             .BuildServiceProvider();
 
@@ -31,6 +45,12 @@ internal abstract class Program
         {
             var bot = serviceProvider.GetRequiredService<IBot>();
             await bot.StartAsync(serviceProvider);
+            // Ensure database is created/migrated on startup (simple approach). This will create the DB schema if missing.
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                db.Database.Migrate();
+            }
             do
             {
                 var keyInfo = Console.ReadKey();
