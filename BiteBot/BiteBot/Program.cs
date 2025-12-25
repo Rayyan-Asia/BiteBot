@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using BiteBot.Data;
+using BiteBot.Repositories;
+using BiteBot.Services;
 
 namespace BiteBot;
 
@@ -37,6 +39,8 @@ internal abstract class Program
                 }
                 options.UseNpgsql(conn);
             })
+            .AddScoped<IRestaurantRepository, RestaurantRepository>()
+            .AddScoped<IRestaurantService, RestaurantService>()
             .AddScoped<IBot, Bot>()
             .BuildServiceProvider();
 
@@ -49,12 +53,12 @@ internal abstract class Program
             using (var scope = serviceProvider.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                db.Database.Migrate();
+                await db.Database.MigrateAsync();
             }
             do
             {
                 var keyInfo = Console.ReadKey();
-                if (keyInfo.Key == ConsoleKey.Escape || keyInfo.Key == ConsoleKey.Q)
+                if (keyInfo.Key is ConsoleKey.Escape or ConsoleKey.Q)
                 {
                     await bot.StopAsync();
                     return;

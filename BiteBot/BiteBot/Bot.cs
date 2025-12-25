@@ -1,6 +1,5 @@
 using System.Reflection;
 using Discord;
-using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
@@ -14,7 +13,6 @@ public class Bot : IBot
     private readonly ILogger<Bot> _logger;
     private readonly IConfiguration _configuration;
     private readonly DiscordSocketClient _client;
-    private readonly CommandService _commands;
     private readonly InteractionService _interactions;
     
     public Bot(ILogger<Bot> logger, IConfiguration configuration)
@@ -28,7 +26,6 @@ public class Bot : IBot
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
         };
         _client = new DiscordSocketClient(config);
-        _commands = new CommandService();
         _interactions = new InteractionService(_client);
     }
     
@@ -38,9 +35,6 @@ public class Bot : IBot
         
         _logger.LogInformation("Starting bot...");
         _serviceProvider = serviceProvider;
-        
-        // Load text command modules
-        await _commands.AddModulesAsync(Assembly.GetExecutingAssembly(), _serviceProvider);
         
         // Load interaction/slash command modules
         await _interactions.AddModulesAsync(Assembly.GetExecutingAssembly(), _serviceProvider);
@@ -85,9 +79,6 @@ public class Bot : IBot
             var ctx = new SocketInteractionContext(_client, interaction);
             await _interactions.ExecuteCommandAsync(ctx, _serviceProvider);
         };
-        
-        // Hook up message handler for text commands
-        _client.MessageReceived += HandleCommandAsync;
     }
 
     public async Task StopAsync()
@@ -95,36 +86,5 @@ public class Bot : IBot
         _logger.LogInformation("Stopping bot...");
         await _client.LogoutAsync();
         await _client.StopAsync();
-    }
-    
-    private async Task HandleCommandAsync(SocketMessage arg)
-    {
-        if (arg is not SocketUserMessage message || message.Author.IsBot)
-        {
-            return;
-        }
-        
-        // log
-        _logger.LogInformation("Received message from {User}: {Message}", message.Author.Username, message.Content);
-        
-        var position = 0;
-        var messageIsCommand = message.HasStringPrefix("/", ref position);
-        
-        if (messageIsCommand)
-        {
-            var context = new SocketCommandContext(_client, message);
-            var result = await _commands.ExecuteAsync(context, position, _serviceProvider);
-            if (!result.IsSuccess)
-            {
-                _logger.LogWarning("Command execution failed: {Error} {Reason}", result.Error, result.ErrorReason);
-
-                // If it's an unknown command don't spam logs, but for now we'll log everything.
-            }
-            else
-            {
-                _logger.LogInformation("Command executed successfully: {Content}", message.Content);
-            }
-        }
-
     }
 }
