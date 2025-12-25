@@ -69,13 +69,14 @@ public class RestaurantService(IRestaurantRepository repository, ILogger<Restaur
         }
     }
 
-    public async Task<IEnumerable<Restaurant>> SearchRestaurantsAsync(string name, City city)
+    public async Task<IEnumerable<Restaurant>> SearchRestaurantsAsync(string name, City city, int pageSize, int pageNumber = 1)
     {
-        logger.LogInformation("Searching for restaurants with name containing '{Name}' in {City}", name, city);
+        logger.LogInformation("Searching for restaurants with name containing '{Name}' in {City} (page: {PageNumber}, size: {PageSize})", 
+            name, city, pageNumber, pageSize);
         
         try
         {
-            var results = await repository.SearchRestaurantsByNameAndCityAsync(name, city);
+            var results = await repository.SearchRestaurantsByNameAndCityAsync(name, city, pageSize, pageNumber);
             var resultList = results.ToList();
             logger.LogInformation("Found {Count} restaurants matching search criteria", resultList.Count);
             return resultList;
@@ -88,6 +89,25 @@ public class RestaurantService(IRestaurantRepository repository, ILogger<Restaur
         catch (Exception ex)
         {
             logger.LogError(ex, "Error searching restaurants");
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<Restaurant>> SearchRestaurantsByNameAsync(string name, int pageSize, int pageNumber = 1)
+    {
+        logger.LogInformation("Searching for restaurants with name containing '{Name}' across all cities (page: {PageNumber}, size: {PageSize})", 
+            name, pageNumber, pageSize);
+        
+        try
+        {
+            var results = await repository.SearchRestaurantsByNameAsync(name, pageSize, pageNumber);
+            var resultList = results.ToList();
+            logger.LogInformation("Found {Count} restaurants matching search criteria", resultList.Count);
+            return resultList;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error searching restaurants by name");
             throw;
         }
     }
@@ -113,13 +133,14 @@ public class RestaurantService(IRestaurantRepository repository, ILogger<Restaur
         }
     }
 
-    public async Task<IEnumerable<Restaurant>> GetRestaurantsByCityAsync(City city)
+    public async Task<IEnumerable<Restaurant>> GetRestaurantsByCityAsync(City city, int pageSize, int pageNumber = 1)
     {
-        logger.LogInformation("Fetching all restaurants in {City}", city);
+        logger.LogInformation("Fetching all restaurants in {City} (page: {PageNumber}, size: {PageSize})", 
+            city, pageNumber, pageSize);
         
         try
         {
-            var results = await repository.GetAllByCityAsync(city);
+            var results = await repository.GetAllByCityAsync(city, pageSize, pageNumber);
             var resultList = results.ToList();
             logger.LogInformation("Found {Count} restaurants in {City}", resultList.Count, city);
             return resultList;
@@ -131,4 +152,3 @@ public class RestaurantService(IRestaurantRepository repository, ILogger<Restaur
         }
     }
 }
-

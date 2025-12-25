@@ -22,7 +22,12 @@ public interface IRestaurantService
     /// <summary>
     /// Searches for restaurants by name within a specific city
     /// </summary>
-    Task<IEnumerable<Restaurant>> SearchRestaurantsAsync(string name, City city);
+    Task<IEnumerable<Restaurant>> SearchRestaurantsAsync(string name, City city, int pageSize, int pageNumber = 1);
+    
+    /// <summary>
+    /// Searches for restaurants by name across all cities
+    /// </summary>
+    Task<IEnumerable<Restaurant>> SearchRestaurantsByNameAsync(string name, int pageSize, int pageNumber = 1);
     
     /// <summary>
     /// Deletes a restaurant by its unique identifier
@@ -32,6 +37,5 @@ public interface IRestaurantService
     /// <summary>
     /// Gets all restaurants in a specific city
     /// </summary>
-    Task<IEnumerable<Restaurant>> GetRestaurantsByCityAsync(City city);
+    Task<IEnumerable<Restaurant>> GetRestaurantsByCityAsync(City city, int pageSize, int pageNumber = 1);
 }
-

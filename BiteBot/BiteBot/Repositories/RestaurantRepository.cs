@@ -51,22 +51,68 @@ public class RestaurantRepository(AppDbContext context) : IRestaurantRepository
             .FirstAsync();
     }
 
-    public async Task<IEnumerable<Restaurant>> SearchRestaurantsByNameAndCityAsync(string name, City city)
+    public async Task<IEnumerable<Restaurant>> SearchRestaurantsByNameAndCityAsync(string name, City city, int pageSize, int pageNumber = 1)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Restaurant name cannot be null or empty.", nameof(name));
         }
         
+        if (pageNumber < 1)
+        {
+            throw new ArgumentException("Page number must be greater than 0.", nameof(pageNumber));
+        }
+        
+        var skip = (pageNumber - 1) * pageSize;
+        
         return await context.Restaurants
             .Where(r => r.City == city && r.Name.Contains(name))
+            .OrderBy(r => r.Name)
+            .Skip(skip)
+            .Take(pageSize)
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Restaurant>> GetAllByCityAsync(City city)
+    public async Task<IEnumerable<Restaurant>> SearchRestaurantsByNameAsync(string name, int pageSize, int pageNumber = 1)
     {
+        if (pageNumber < 1)
+        {
+            throw new ArgumentException("Page number must be greater than 0.", nameof(pageNumber));
+        }
+        
+        var skip = (pageNumber - 1) * pageSize;
+        
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return await context.Restaurants
+                .OrderBy(r => r.Name)
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+        
+        return await context.Restaurants
+            .Where(r => r.Name.Contains(name))
+            .OrderBy(r => r.Name)
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Restaurant>> GetAllByCityAsync(City city, int pageSize, int pageNumber = 1)
+    {
+        if (pageNumber < 1)
+        {
+            throw new ArgumentException("Page number must be greater than 0.", nameof(pageNumber));
+        }
+        
+        var skip = (pageNumber - 1) * pageSize;
+        
         return await context.Restaurants
             .Where(r => r.City == city)
+            .OrderBy(r => r.Name)
+            .Skip(skip)
+            .Take(pageSize)
             .ToListAsync();
     }
 

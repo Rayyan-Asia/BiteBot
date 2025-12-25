@@ -24,7 +24,7 @@ public class SuggestRestaurantSlashCommand : InteractionModuleBase<SocketInterac
         _logger.LogInformation("Suggest command invoked by {User} with city option: {CityOption}", 
             Context.User.Username, cityOption);
 
-        await DeferAsync();
+        await DeferAsync(ephemeral: true);
 
         try
         {
@@ -93,7 +93,7 @@ public class SuggestRestaurantSlashCommand : InteractionModuleBase<SocketInterac
     private async Task RespondWithRestaurantSuggestion(Restaurant restaurant, City city)
     {
         var response = BuildRestaurantSuggestionMessage(restaurant, city);
-        await FollowupAsync(response);
+        await FollowupAsync(response, ephemeral: true);
     }
 
     private string BuildRestaurantSuggestionMessage(Restaurant restaurant, City city)
