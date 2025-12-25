@@ -41,6 +41,7 @@ internal abstract class Program
             })
             .AddScoped<IRestaurantRepository, RestaurantRepository>()
             .AddScoped<IRestaurantService, RestaurantService>()
+            .AddScoped<IAuditService, AuditService>()
             .AddScoped<IBot, Bot>()
             .BuildServiceProvider();
 

@@ -8,11 +8,16 @@ namespace BiteBot.Commands;
 public class AddRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IRestaurantService _restaurantService;
+    private readonly IAuditService _auditService;
     private readonly ILogger<AddRestaurantSlashCommand> _logger;
 
-    public AddRestaurantSlashCommand(IRestaurantService restaurantService, ILogger<AddRestaurantSlashCommand> logger)
+    public AddRestaurantSlashCommand(
+        IRestaurantService restaurantService, 
+        IAuditService auditService,
+        ILogger<AddRestaurantSlashCommand> logger)
     {
         _restaurantService = restaurantService;
+        _auditService = auditService;
         _logger = logger;
     }
 
@@ -48,6 +53,9 @@ public class AddRestaurantSlashCommand : InteractionModuleBase<SocketInteraction
             }
 
             var restaurant = await CreateRestaurant(name, city, url);
+            
+            // Log the audit trail
+            await _auditService.LogCreateAsync(restaurant, Context.User.Username, Context.User.Id);
             
             await RespondWithSuccess(restaurant);
             

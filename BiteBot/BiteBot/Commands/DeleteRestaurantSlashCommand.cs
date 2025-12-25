@@ -8,11 +8,16 @@ namespace BiteBot.Commands;
 public class DeleteRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IRestaurantService _restaurantService;
+    private readonly IAuditService _auditService;
     private readonly ILogger<DeleteRestaurantSlashCommand> _logger;
 
-    public DeleteRestaurantSlashCommand(IRestaurantService restaurantService, ILogger<DeleteRestaurantSlashCommand> logger)
+    public DeleteRestaurantSlashCommand(
+        IRestaurantService restaurantService, 
+        IAuditService auditService,
+        ILogger<DeleteRestaurantSlashCommand> logger)
     {
         _restaurantService = restaurantService;
+        _auditService = auditService;
         _logger = logger;
     }
 
@@ -36,6 +41,10 @@ public class DeleteRestaurantSlashCommand : InteractionModuleBase<SocketInteract
             }
 
             var restaurant = await _restaurantService.GetRestaurantByIdAsync(id);
+            
+            // Log the audit trail before deletion
+            await _auditService.LogDeleteAsync(restaurant, Context.User.Username, Context.User.Id);
+            
             await _restaurantService.DeleteRestaurantAsync(id);
             await RespondWithDeleteSuccess(restaurant.Name, restaurant.City.ToString());
             

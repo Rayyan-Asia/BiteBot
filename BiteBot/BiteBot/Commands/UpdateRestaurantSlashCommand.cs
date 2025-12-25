@@ -9,11 +9,16 @@ namespace BiteBot.Commands;
 public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly IRestaurantService _restaurantService;
+    private readonly IAuditService _auditService;
     private readonly ILogger<UpdateRestaurantSlashCommand> _logger;
 
-    public UpdateRestaurantSlashCommand(IRestaurantService restaurantService, ILogger<UpdateRestaurantSlashCommand> logger)
+    public UpdateRestaurantSlashCommand(
+        IRestaurantService restaurantService,
+        IAuditService auditService,
+        ILogger<UpdateRestaurantSlashCommand> logger)
     {
         _restaurantService = restaurantService;
+        _auditService = auditService;
         _logger = logger;
     }
 
@@ -40,6 +45,15 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
             }
 
             var restaurant = await _restaurantService.GetRestaurantByIdAsync(id);
+
+            // Create a copy of the old restaurant for audit purposes
+            var oldRestaurant = new Restaurant
+            {
+                Id = restaurant.Id,
+                Name = restaurant.Name,
+                City = restaurant.City,
+                Url = restaurant.Url
+            };
 
             var hasChanges = false;
 
@@ -89,6 +103,9 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
             }
 
             var updatedRestaurant = await _restaurantService.UpsertRestaurantAsync(restaurant);
+            
+            // Log the audit trail with old and new values
+            await _auditService.LogUpdateAsync(id, oldRestaurant, updatedRestaurant, Context.User.Username, Context.User.Id);
             
             await RespondWithSuccess(updatedRestaurant);
             
