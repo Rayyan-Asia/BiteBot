@@ -17,6 +17,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.City).IsRequired();
             entity.Property(e => e.Url);
+            
+            // Add unique constraint on Name and City combination
+            entity.HasIndex(e => new { e.Name, e.City })
+                .IsUnique();
         });
     }
 }

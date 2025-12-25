@@ -5,18 +5,24 @@ using Microsoft.Extensions.Logging;
 
 namespace BiteBot.Commands;
 
-public class UpsertRestaurantSlashCommand(
-    IRestaurantService restaurantService,
-    ILogger<UpsertRestaurantSlashCommand> logger)
-    : InteractionModuleBase<SocketInteractionContext>
+public class AddRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
 {
-    [SlashCommand("upsert", "Create or update a restaurant")]
-    public async Task UpsertAsync(
+    private readonly IRestaurantService _restaurantService;
+    private readonly ILogger<AddRestaurantSlashCommand> _logger;
+
+    public AddRestaurantSlashCommand(IRestaurantService restaurantService, ILogger<AddRestaurantSlashCommand> logger)
+    {
+        _restaurantService = restaurantService;
+        _logger = logger;
+    }
+
+    [SlashCommand("add", "Add a new restaurant")]
+    public async Task AddAsync(
         [Summary("name", "Restaurant name")] string name,
         [Summary("city", "City: -r/R for Ramallah, -n/N for Nablus")] string cityOption,
         [Summary("url", "Optional restaurant URL")] string? url = null)
     {
-        logger.LogInformation("Upsert command invoked by {User} with name: {Name}, city: {CityOption}, url: {Url}", 
+        _logger.LogInformation("Add command invoked by {User} with name: {Name}, city: {CityOption}, url: {Url}", 
             Context.User.Username, name, cityOption, url);
 
         await DeferAsync(ephemeral: true);
@@ -41,17 +47,25 @@ public class UpsertRestaurantSlashCommand(
                 return;
             }
 
-            var restaurant = await CreateOrUpdateRestaurant(name, city, url);
+            var restaurant = await CreateRestaurant(name, city, url);
             
             await RespondWithSuccess(restaurant);
             
-            logger.LogInformation("Successfully upserted restaurant {RestaurantName} in {City} by {User}", 
+            _logger.LogInformation("Successfully added restaurant {RestaurantName} in {City} by {User}", 
                 restaurant.Name, city, Context.User.Username);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error upserting restaurant with name: {Name}, city: {CityOption}", name, cityOption);
-            await RespondWithGenericError();
+            _logger.LogError(ex, "Error adding restaurant with name: {Name}, city: {CityOption}", name, cityOption);
+            
+            if (ex.Message.Contains("duplicate") || ex.InnerException?.Message.Contains("duplicate") == true)
+            {
+                await RespondWithDuplicateError(name);
+            }
+            else
+            {
+                await RespondWithGenericError();
+            }
         }
     }
 
@@ -81,16 +95,17 @@ public class UpsertRestaurantSlashCommand(
                && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
     }
 
-    private async Task<Restaurant> CreateOrUpdateRestaurant(string name, City city, string? url)
+    private async Task<Restaurant> CreateRestaurant(string name, City city, string? url)
     {
         var restaurant = new Restaurant
         {
+            Id = Guid.NewGuid(),
             Name = name.Trim(),
             City = city,
             Url = string.IsNullOrWhiteSpace(url) ? null : url.Trim()
         };
 
-        return await restaurantService.UpsertRestaurantAsync(restaurant);
+        return await _restaurantService.UpsertRestaurantAsync(restaurant);
     }
 
     private async Task RespondWithInvalidNameError()
@@ -116,9 +131,16 @@ public class UpsertRestaurantSlashCommand(
             ephemeral: true);
     }
 
+    private async Task RespondWithDuplicateError(string name)
+    {
+        await FollowupAsync(
+            $"❌ A restaurant with the name **{name}** already exists in this city. Use `/update` to modify it instead.",
+            ephemeral: true);
+    }
+
     private async Task RespondWithSuccess(Restaurant restaurant)
     {
-        var message = $"✅ **Restaurant saved successfully!**\n\n" +
+        var message = $"✅ **Restaurant added successfully!**\n\n" +
                       $"📍 **Name:** {restaurant.Name}\n" +
                       $"🏙️ **City:** {restaurant.City}";
 
@@ -133,7 +155,7 @@ public class UpsertRestaurantSlashCommand(
     private async Task RespondWithGenericError()
     {
         await FollowupAsync(
-            "❌ An error occurred while saving the restaurant. Please try again later.",
+            "❌ An error occurred while adding the restaurant. Please try again later.",
             ephemeral: true);
     }
 }
