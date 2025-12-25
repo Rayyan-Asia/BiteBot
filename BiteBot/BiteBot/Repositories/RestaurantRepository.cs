@@ -66,7 +66,7 @@ public class RestaurantRepository(AppDbContext context) : IRestaurantRepository
         var skip = (pageNumber - 1) * pageSize;
         
         return await context.Restaurants
-            .Where(r => r.City == city && r.Name.Contains(name))
+            .Where(r => r.City == city && EF.Functions.ILike(r.Name, $"%{name}%"))
             .OrderBy(r => r.Name)
             .Skip(skip)
             .Take(pageSize)
@@ -92,7 +92,7 @@ public class RestaurantRepository(AppDbContext context) : IRestaurantRepository
         }
         
         return await context.Restaurants
-            .Where(r => r.Name.Contains(name))
+            .Where(r => EF.Functions.ILike(r.Name, $"%{name}%"))
             .OrderBy(r => r.Name)
             .Skip(skip)
             .Take(pageSize)
