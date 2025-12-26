@@ -1,0 +1,153 @@
+using Discord;
+using Discord.Interactions;
+using Discord.WebSocket;
+using BiteBot.Services;
+using Microsoft.Extensions.Logging;
+using System.Text;
+
+namespace BiteBot.Commands;
+
+public class SummarizeSlashCommand : InteractionModuleBase<SocketInteractionContext>
+{
+    private readonly IAiService _aiService;
+    private readonly ILogger<SummarizeSlashCommand> _logger;
+
+    public SummarizeSlashCommand(
+        IAiService aiService,
+        ILogger<SummarizeSlashCommand> logger)
+    {
+        _aiService = aiService;
+        _logger = logger;
+    }
+
+    [SlashCommand("summarize", "Summarize all orders in an order thread using AI")]
+    public async Task SummarizeAsync()
+    {
+        _logger.LogInformation("Summarize command invoked by {User} in channel {ChannelId}", 
+            Context.User.Username, Context.Channel.Id);
+
+        await DeferAsync(ephemeral: false);
+
+        try
+        {
+            // Check if we're in a thread
+            if (Context.Channel is not SocketThreadChannel threadChannel)
+            {
+                await RespondWithNotInThreadError();
+                return;
+            }
+
+            _logger.LogInformation("Fetching messages from thread {ThreadName} (ID: {ThreadId})", 
+                threadChannel.Name, threadChannel.Id);
+
+            // Fetch all messages from the thread
+            var messages = await FetchThreadMessagesAsync(threadChannel);
+
+            if (messages.Count == 0)
+            {
+                await RespondWithNoMessagesError();
+                return;
+            }
+
+            _logger.LogInformation("Found {MessageCount} messages in thread", messages.Count);
+
+            // Build the prompt for the AI
+            var prompt = BuildSummarizationPrompt(threadChannel.Name, messages);
+
+            _logger.LogInformation("Sending prompt to AI service (prompt length: {Length} characters)", prompt.Length);
+
+            // Get AI response
+            var aiResponse = await _aiService.GenerateResponseAsync(prompt);
+
+            // Send the summary
+            await RespondWithSummary(threadChannel.Name, aiResponse);
+
+            _logger.LogInformation("Successfully generated and sent summary for thread {ThreadName}", threadChannel.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating summary for thread");
+            await RespondWithGenericError(ex.Message);
+        }
+    }
+
+    private async Task<List<IMessage>> FetchThreadMessagesAsync(SocketThreadChannel threadChannel)
+    {
+        var messages = new List<IMessage>();
+        var fetchedMessages = await threadChannel.GetMessagesAsync(limit: 100).FlattenAsync();
+        
+        foreach (var message in fetchedMessages.OrderBy(m => m.Timestamp))
+        {
+            // Skip bot messages and messages without content
+            if (!message.Author.IsBot && !string.IsNullOrWhiteSpace(message.Content))
+            {
+                messages.Add(message);
+            }
+        }
+
+        return messages;
+    }
+
+    private string BuildSummarizationPrompt(string restaurantName, List<IMessage> messages)
+    {
+        var promptBuilder = new StringBuilder();
+        
+        promptBuilder.AppendLine($"You are a helpful assistant that summarizes restaurant orders. Below are messages from a Discord thread for ordering from '{restaurantName}'.");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Please analyze these messages and create a clear, organized summary of all the orders. Group similar items together, count quantities, and present the information in an easy-to-read format. Include who ordered what if it's clear from the messages.");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Messages:");
+        promptBuilder.AppendLine("---");
+
+        foreach (var message in messages)
+        {
+            promptBuilder.AppendLine($"{message.Author.Username}: {message.Content}");
+        }
+
+        promptBuilder.AppendLine("---");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Please provide a well-formatted summary of the orders:");
+
+        return promptBuilder.ToString();
+    }
+
+    private async Task RespondWithNotInThreadError()
+    {
+        await FollowupAsync(
+            "❌ This command can only be used inside an order thread created by the `/order` command.",
+            ephemeral: true);
+    }
+
+    private async Task RespondWithNoMessagesError()
+    {
+        await FollowupAsync(
+            "❌ No messages found in this thread to summarize.",
+            ephemeral: true);
+    }
+
+    private async Task RespondWithSummary(string threadName, string summary)
+    {
+        var embed = new EmbedBuilder()
+            .WithTitle($"📋 Order Summary for {threadName}")
+            .WithDescription(summary)
+            .WithColor(Color.Green)
+            .WithFooter("Generated by AI")
+            .WithCurrentTimestamp()
+            .Build();
+
+        await FollowupAsync(embed: embed);
+    }
+
+    private async Task RespondWithGenericError(string errorDetail)
+    {
+        var message = "❌ An error occurred while generating the summary. Please try again later.";
+        
+        if (errorDetail.Contains("communicate with AI service") || errorDetail.Contains("timed out"))
+        {
+            message = "❌ Could not connect to the AI service. Please make sure Ollama is running and try again.";
+        }
+
+        await FollowupAsync(message, ephemeral: true);
+    }
+}
+

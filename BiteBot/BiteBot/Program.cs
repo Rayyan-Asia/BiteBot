@@ -39,9 +39,11 @@ internal abstract class Program
                 }
                 options.UseNpgsql(conn);
             })
+            .AddHttpClient()
             .AddScoped<IRestaurantRepository, RestaurantRepository>()
             .AddScoped<IRestaurantService, RestaurantService>()
             .AddScoped<IAuditService, AuditService>()
+            .AddScoped<IAiService, OllamaAiService>()
             .AddScoped<IBot, Bot>()
             .BuildServiceProvider();
 

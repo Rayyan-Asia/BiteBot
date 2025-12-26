@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -16,13 +14,85 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    networks:
+      - bitebot-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bitebot} -d ${POSTGRES_DB:-bitebot_db} -h localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bitebot-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - bitebot-network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Uncomment below if you have NVIDIA GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: bitebot-ollama-setup
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - bitebot-network
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      sleep 10 &&
+      ollama pull llama3.1 &&
+      echo 'Llama 3.1 model pulled successfully'
+      "
+
+  bitebot:
+    build:
+      context: ./BiteBot/BiteBot
+      dockerfile: Dockerfile
+    container_name: bitebot-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - DefaultConnection=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - OllamaUrl=${OllamaUrl}
+      - DiscordToken=${DiscordToken}
+      - GuildID=${GuildID}
+    networks:
+      - bitebot-network
+
 volumes:
   db_data:
     driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  bitebot-network:
+    driver: bridge
 
