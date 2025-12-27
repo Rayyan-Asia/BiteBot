@@ -5,29 +5,19 @@ using Microsoft.Extensions.Logging;
 
 namespace BiteBot.Commands;
 
-public class DeleteRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
+public class DeleteRestaurantSlashCommand(
+    IRestaurantService restaurantService,
+    IAuditService auditService,
+    ILogger<DeleteRestaurantSlashCommand> logger)
+    : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly IRestaurantService _restaurantService;
-    private readonly IAuditService _auditService;
-    private readonly ILogger<DeleteRestaurantSlashCommand> _logger;
-
-    public DeleteRestaurantSlashCommand(
-        IRestaurantService restaurantService, 
-        IAuditService auditService,
-        ILogger<DeleteRestaurantSlashCommand> logger)
-    {
-        _restaurantService = restaurantService;
-        _auditService = auditService;
-        _logger = logger;
-    }
-
     [SlashCommand("delete", "Delete a restaurant from the database")]
     public async Task DeleteAsync(
         [Summary("restaurant", "Select the restaurant to delete")]
         [Autocomplete(typeof(RestaurantAutocompleteHandler))]
         string restaurantId)
     {
-        _logger.LogInformation("Delete command invoked by {User} for restaurant ID: {RestaurantId}", 
+        logger.LogInformation("Delete command invoked by {User} for restaurant ID: {RestaurantId}", 
             Context.User.Username, restaurantId);
 
         await DeferAsync(ephemeral: true);
@@ -40,30 +30,30 @@ public class DeleteRestaurantSlashCommand : InteractionModuleBase<SocketInteract
                 return;
             }
 
-            var restaurant = await _restaurantService.GetRestaurantByIdAsync(id);
+            var restaurant = await restaurantService.GetRestaurantByIdAsync(id);
             
             // Log the audit trail before deletion
-            await _auditService.LogDeleteAsync(restaurant, Context.User.Username, Context.User.Id);
+            await auditService.LogDeleteAsync(restaurant, Context.User.Username, Context.User.Id);
             
-            await _restaurantService.DeleteRestaurantAsync(id);
+            await restaurantService.DeleteRestaurantAsync(id);
             await RespondWithDeleteSuccess(restaurant.Name, restaurant.City.ToString());
             
-            _logger.LogInformation("Successfully deleted restaurant {RestaurantName} (ID: {RestaurantId}) by user {User}", 
+            logger.LogInformation("Successfully deleted restaurant {RestaurantName} (ID: {RestaurantId}) by user {User}", 
                 restaurant.Name, id, Context.User.Username);
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "Restaurant with ID {RestaurantId} not found for deletion", restaurantId);
+            logger.LogWarning(ex, "Restaurant with ID {RestaurantId} not found for deletion", restaurantId);
             await RespondWithRestaurantNotFound();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting restaurant with ID: {RestaurantId}", restaurantId);
+            logger.LogError(ex, "Error deleting restaurant with ID: {RestaurantId}", restaurantId);
             await RespondWithGenericError();
         }
     }
 
-    private bool TryParseRestaurantId(string restaurantId, out Guid id)
+    private static bool TryParseRestaurantId(string restaurantId, out Guid id)
     {
         return Guid.TryParse(restaurantId, out id);
     }

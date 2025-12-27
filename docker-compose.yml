@@ -56,12 +56,13 @@ services:
       - bitebot-network
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      - MODEL=${OLLAMA_MODEL:-llama3.1}
     entrypoint: /bin/sh
     command: >
       -c "
       sleep 10 &&
-      ollama pull llama3.1 &&
-      echo 'Llama 3.1 model pulled successfully'
+      ollama pull $$MODEL &&
+      echo '$$MODEL model pulled successfully'
       "
 
   bitebot:
@@ -83,6 +84,7 @@ services:
       - DefaultConnection=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       # Override OllamaUrl to use Docker service name (not localhost)
       - OllamaUrl=http://ollama:11434
+      - OllamaModel=${OLLAMA_MODEL:-llama3.1}
     networks:
       - bitebot-network
 

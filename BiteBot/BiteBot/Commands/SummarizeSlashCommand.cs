@@ -7,23 +7,15 @@ using System.Text;
 
 namespace BiteBot.Commands;
 
-public class SummarizeSlashCommand : InteractionModuleBase<SocketInteractionContext>
+public class SummarizeSlashCommand(
+    IAiService aiService,
+    ILogger<SummarizeSlashCommand> logger)
+    : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly IAiService _aiService;
-    private readonly ILogger<SummarizeSlashCommand> _logger;
-
-    public SummarizeSlashCommand(
-        IAiService aiService,
-        ILogger<SummarizeSlashCommand> logger)
-    {
-        _aiService = aiService;
-        _logger = logger;
-    }
-
     [SlashCommand("summarize", "Summarize all orders in an order thread using AI")]
     public async Task SummarizeAsync()
     {
-        _logger.LogInformation("Summarize command invoked by {User} in channel {ChannelId}", 
+        logger.LogInformation("Summarize command invoked by {User} in channel {ChannelId}", 
             Context.User.Username, Context.Channel.Id);
 
         await DeferAsync(ephemeral: false);
@@ -37,7 +29,7 @@ public class SummarizeSlashCommand : InteractionModuleBase<SocketInteractionCont
                 return;
             }
 
-            _logger.LogInformation("Fetching messages from thread {ThreadName} (ID: {ThreadId})", 
+            logger.LogInformation("Fetching messages from thread {ThreadName} (ID: {ThreadId})", 
                 threadChannel.Name, threadChannel.Id);
 
             // Fetch all messages from the thread
@@ -49,46 +41,36 @@ public class SummarizeSlashCommand : InteractionModuleBase<SocketInteractionCont
                 return;
             }
 
-            _logger.LogInformation("Found {MessageCount} messages in thread", messages.Count);
+            logger.LogInformation("Found {MessageCount} messages in thread", messages.Count);
 
             // Build the prompt for the AI
             var prompt = BuildSummarizationPrompt(threadChannel.Name, messages);
 
-            _logger.LogInformation("Sending prompt to AI service (prompt length: {Length} characters)", prompt.Length);
+            logger.LogInformation("Sending prompt to AI service (prompt length: {Length} characters)", prompt.Length);
 
             // Get AI response
-            var aiResponse = await _aiService.GenerateResponseAsync(prompt);
+            var aiResponse = await aiService.GenerateResponseAsync(prompt);
 
             // Send the summary
             await RespondWithSummary(threadChannel.Name, aiResponse);
 
-            _logger.LogInformation("Successfully generated and sent summary for thread {ThreadName}", threadChannel.Name);
+            logger.LogInformation("Successfully generated and sent summary for thread {ThreadName}", threadChannel.Name);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating summary for thread");
+            logger.LogError(ex, "Error generating summary for thread");
             await RespondWithGenericError(ex.Message);
         }
     }
 
-    private async Task<List<IMessage>> FetchThreadMessagesAsync(SocketThreadChannel threadChannel)
+    private static async Task<List<IMessage>> FetchThreadMessagesAsync(SocketThreadChannel threadChannel)
     {
-        var messages = new List<IMessage>();
         var fetchedMessages = await threadChannel.GetMessagesAsync(limit: 100).FlattenAsync();
-        
-        foreach (var message in fetchedMessages.OrderBy(m => m.Timestamp))
-        {
-            // Skip bot messages and messages without content
-            if (!message.Author.IsBot && !string.IsNullOrWhiteSpace(message.Content))
-            {
-                messages.Add(message);
-            }
-        }
 
-        return messages;
+        return fetchedMessages.OrderBy(m => m.Timestamp).Where(message => !message.Author.IsBot && !string.IsNullOrWhiteSpace(message.Content)).ToList();
     }
 
-    private string BuildSummarizationPrompt(string restaurantName, List<IMessage> messages)
+    private static string BuildSummarizationPrompt(string restaurantName, List<IMessage> messages)
     {
         var promptBuilder = new StringBuilder();
         

@@ -2,26 +2,17 @@ using Discord.Interactions;
 using BiteBot.Models;
 using BiteBot.Services;
 using BiteBot.Interactions;
+using BiteBot.Helpers;
 using Microsoft.Extensions.Logging;
 
 namespace BiteBot.Commands;
 
-public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteractionContext>
+public class UpdateRestaurantSlashCommand(
+    IRestaurantService restaurantService,
+    IAuditService auditService,
+    ILogger<UpdateRestaurantSlashCommand> logger)
+    : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly IRestaurantService _restaurantService;
-    private readonly IAuditService _auditService;
-    private readonly ILogger<UpdateRestaurantSlashCommand> _logger;
-
-    public UpdateRestaurantSlashCommand(
-        IRestaurantService restaurantService,
-        IAuditService auditService,
-        ILogger<UpdateRestaurantSlashCommand> logger)
-    {
-        _restaurantService = restaurantService;
-        _auditService = auditService;
-        _logger = logger;
-    }
-
     [SlashCommand("update", "Update an existing restaurant")]
     public async Task UpdateAsync(
         [Summary("restaurant", "Select restaurant to update")]
@@ -31,7 +22,7 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
         [Summary("city", "New city: -r/R for Ramallah, -n/N for Nablus (leave empty to keep current)")] string? cityOption = null,
         [Summary("url", "New restaurant URL (leave empty to keep current, use 'remove' to delete)")] string? url = null)
     {
-        _logger.LogInformation("Update command invoked by {User} with restaurantId: {RestaurantId}", 
+        logger.LogInformation("Update command invoked by {User} with restaurantId: {RestaurantId}", 
             Context.User.Username, restaurantId);
 
         await DeferAsync(ephemeral: true);
@@ -44,7 +35,7 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
                 return;
             }
 
-            var restaurant = await _restaurantService.GetRestaurantByIdAsync(id);
+            var restaurant = await restaurantService.GetRestaurantByIdAsync(id);
 
             // Create a copy of the old restaurant for audit purposes
             var oldRestaurant = new Restaurant
@@ -67,7 +58,7 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
             // Update city if provided
             if (!string.IsNullOrWhiteSpace(cityOption))
             {
-                if (!TryParseCity(cityOption, out var city))
+                if (!ValidationHelper.TryParseCity(cityOption, out var city))
                 {
                     await RespondWithInvalidCityError();
                     return;
@@ -86,7 +77,7 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
                 }
                 else if (!string.IsNullOrWhiteSpace(url))
                 {
-                    if (!IsValidUrl(url))
+                    if (!ValidationHelper.IsValidUrl(url))
                     {
                         await RespondWithInvalidUrlError();
                         return;
@@ -102,24 +93,24 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
                 return;
             }
 
-            var updatedRestaurant = await _restaurantService.UpsertRestaurantAsync(restaurant);
+            var updatedRestaurant = await restaurantService.UpsertRestaurantAsync(restaurant);
             
             // Log the audit trail with old and new values
-            await _auditService.LogUpdateAsync(id, oldRestaurant, updatedRestaurant, Context.User.Username, Context.User.Id);
+            await auditService.LogUpdateAsync(id, oldRestaurant, updatedRestaurant, Context.User.Username, Context.User.Id);
             
             await RespondWithSuccess(updatedRestaurant);
             
-            _logger.LogInformation("Successfully updated restaurant {RestaurantName} (ID: {RestaurantId}) by {User}", 
+            logger.LogInformation("Successfully updated restaurant {RestaurantName} (ID: {RestaurantId}) by {User}", 
                 updatedRestaurant.Name, id, Context.User.Username);
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "Restaurant not found with ID: {RestaurantId}", restaurantId);
+            logger.LogWarning(ex, "Restaurant not found with ID: {RestaurantId}", restaurantId);
             await RespondWithNotFoundError();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating restaurant with ID: {RestaurantId}", restaurantId);
+            logger.LogError(ex, "Error updating restaurant with ID: {RestaurantId}", restaurantId);
             
             if (ex.Message.Contains("duplicate") || ex.InnerException?.Message.Contains("duplicate") == true)
             {
@@ -132,31 +123,6 @@ public class UpdateRestaurantSlashCommand : InteractionModuleBase<SocketInteract
         }
     }
 
-    private bool TryParseCity(string cityOption, out City city)
-    {
-        var normalizedOption = cityOption.Trim().ToLower();
-        
-        switch (normalizedOption)
-        {
-            case "-r":
-            case "r":
-                city = City.Ramallah;
-                return true;
-            case "-n":
-            case "n":
-                city = City.Nablus;
-                return true;
-            default:
-                city = default;
-                return false;
-        }
-    }
-
-    private bool IsValidUrl(string url)
-    {
-        return Uri.TryCreate(url, UriKind.Absolute, out var uriResult) 
-               && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-    }
 
     private async Task RespondWithInvalidRestaurantError()
     {

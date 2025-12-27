@@ -7,26 +7,18 @@ using Microsoft.Extensions.Logging;
 
 namespace BiteBot.Commands;
 
-public class OrderSlashCommand : InteractionModuleBase<SocketInteractionContext>
+public class OrderSlashCommand(
+    IRestaurantService restaurantService,
+    ILogger<OrderSlashCommand> logger)
+    : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly IRestaurantService _restaurantService;
-    private readonly ILogger<OrderSlashCommand> _logger;
-
-    public OrderSlashCommand(
-        IRestaurantService restaurantService,
-        ILogger<OrderSlashCommand> logger)
-    {
-        _restaurantService = restaurantService;
-        _logger = logger;
-    }
-
     [SlashCommand("order", "Create an order thread for a restaurant")]
     public async Task OrderAsync(
         [Summary("restaurant", "Select a restaurant to order from")]
         [Autocomplete(typeof(RestaurantAutocompleteHandler))] 
         string restaurantId)
     {
-        _logger.LogInformation("Order command invoked by {User} with restaurantId: {RestaurantId}", 
+        logger.LogInformation("Order command invoked by {User} with restaurantId: {RestaurantId}", 
             Context.User.Username, restaurantId);
 
         await DeferAsync(ephemeral: true);
@@ -39,7 +31,7 @@ public class OrderSlashCommand : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
-            var restaurant = await _restaurantService.GetRestaurantByIdAsync(id);
+            var restaurant = await restaurantService.GetRestaurantByIdAsync(id);
 
             // Get the channel where the command was invoked
             if (Context.Channel is not SocketTextChannel textChannel)
@@ -56,7 +48,7 @@ public class OrderSlashCommand : InteractionModuleBase<SocketInteractionContext>
                 message: null,
                 invitable: true);
 
-            _logger.LogInformation("Created thread {ThreadName} (ID: {ThreadId}) for restaurant {RestaurantName}", 
+            logger.LogInformation("Created thread {ThreadName} (ID: {ThreadId}) for restaurant {RestaurantName}", 
                 thread.Name, thread.Id, restaurant.Name);
 
             // Build the order message
@@ -68,17 +60,17 @@ public class OrderSlashCommand : InteractionModuleBase<SocketInteractionContext>
             // Respond to the user
             await RespondWithSuccess(restaurant, thread);
             
-            _logger.LogInformation("Successfully created order thread for {RestaurantName} by {User}", 
+            logger.LogInformation("Successfully created order thread for {RestaurantName} by {User}", 
                 restaurant.Name, Context.User.Username);
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "Restaurant not found with ID: {RestaurantId}", restaurantId);
+            logger.LogWarning(ex, "Restaurant not found with ID: {RestaurantId}", restaurantId);
             await RespondWithNotFoundError();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating order thread for restaurant ID: {RestaurantId}", restaurantId);
+            logger.LogError(ex, "Error creating order thread for restaurant ID: {RestaurantId}", restaurantId);
             await RespondWithGenericError();
         }
     }

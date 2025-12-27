@@ -6,14 +6,10 @@ namespace BiteBot.Interactions;
 using Discord;
 using Discord.Interactions;
 
-public sealed class RestaurantAutocompleteHandler : AutocompleteHandler
+public sealed class RestaurantAutocompleteHandler(IRestaurantService restaurants) : AutocompleteHandler
 {
     // AutocompleteHandlers are singleton-cached in Discord.Net’s InteractionService. :contentReference[oaicite:10]{index=10}
     // So inject only singleton-safe dependencies here (e.g., IDbContextFactory or a thread-safe repo).
-    private readonly IRestaurantService _restaurants;
-
-    public RestaurantAutocompleteHandler(IRestaurantService restaurants)
-        => _restaurants = restaurants;
 
     public override async Task<AutocompletionResult> GenerateSuggestionsAsync(
         IInteractionContext context,
@@ -28,7 +24,7 @@ public sealed class RestaurantAutocompleteHandler : AutocompleteHandler
         if (userInput.Length < 2)
             return AutocompletionResult.FromSuccess(); // Shows “No options match…” in client
 
-        var matches = await _restaurants.SearchRestaurantsByNameAsync(userInput, DiscordConstants.AutocompleteMaxResults);
+        var matches = await restaurants.SearchRestaurantsByNameAsync(userInput, DiscordConstants.AutocompleteMaxResults);
 
         // name = label shown in the dropdown
         // value = what your slash command receives

@@ -16,19 +16,42 @@ internal abstract class Program
 
     private static async Task MainAsync(string[] _)
     {
-        var configuration = new ConfigurationBuilder()
+        try
+        {
+            var configuration = BuildConfiguration();
+            var serviceProvider = ConfigureServices(configuration);
+            
+            var bot = serviceProvider.GetRequiredService<IBot>();
+            await bot.StartAsync(serviceProvider);
+            
+            await MigrateDatabaseAsync(serviceProvider);
+            
+            await RunApplicationAsync(bot);
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            Environment.Exit(-1);
+        }
+    }
+
+    private static IConfiguration BuildConfiguration()
+    {
+        return new ConfigurationBuilder()
             .AddEnvironmentVariables()
             .AddUserSecrets(Assembly.GetExecutingAssembly())
             .Build();
-        
-        var serviceProvider = new ServiceCollection()
+    }
+
+    private static ServiceProvider ConfigureServices(IConfiguration configuration)
+    {
+        return new ServiceCollection()
             .AddLogging(builder =>
             {
                 builder.ClearProviders();
                 builder.AddConsole();
             })
-            .AddSingleton<IConfiguration>(configuration)
-            // Configure EF Core DbContext with PostgreSQL. Expects a connection string named "DefaultConnection" in configuration (e.g., user secrets).
+            .AddSingleton(configuration)
             .AddDbContext<AppDbContext>((provider, options) =>
             {
                 var config = provider.GetRequiredService<IConfiguration>();
@@ -47,45 +70,48 @@ internal abstract class Program
             .AddScoped<IAiService, OllamaAiService>()
             .AddScoped<IBot, Bot>()
             .BuildServiceProvider();
+    }
 
+    private static async Task MigrateDatabaseAsync(ServiceProvider serviceProvider)
+    {
+        // Ensure database is created/migrated on startup (simple approach). This will create the DB schema if missing.
+        using var scope = serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+    }
 
-        try
+    private static async Task RunApplicationAsync(IBot bot)
+    {
+        // Check if running in an interactive console (local development) or non-interactive (Docker)
+        if (Console.IsInputRedirected || !Environment.UserInteractive)
         {
-            var bot = serviceProvider.GetRequiredService<IBot>();
-            await bot.StartAsync(serviceProvider);
-            // Ensure database is created/migrated on startup (simple approach). This will create the DB schema if missing.
-            using (var scope = serviceProvider.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                await db.Database.MigrateAsync();
-            }
-            
-            // Check if running in an interactive console (local development) or non-interactive (Docker)
-            if (Console.IsInputRedirected || !Environment.UserInteractive)
-            {
-                // Running in Docker or non-interactive mode - wait indefinitely
-                Console.WriteLine("Running in non-interactive mode. Press Ctrl+C to stop.");
-                await Task.Delay(-1);
-            }
-            else
-            {
-                // Running locally with interactive console
-                Console.WriteLine("Press ESC or Q to quit.");
-                do
-                {
-                    var keyInfo = Console.ReadKey();
-                    if (keyInfo.Key is ConsoleKey.Escape or ConsoleKey.Q)
-                    {
-                        await bot.StopAsync();
-                        return;
-                    }
-                } while (true);
-            }
+            await RunNonInteractiveModeAsync();
         }
-        catch(Exception ex)
+        else
         {
-            Console.WriteLine(ex.Message);
-            Environment.Exit(-1);
+            await RunInteractiveModeAsync(bot);
         }
+    }
+
+    private static async Task RunNonInteractiveModeAsync()
+    {
+        // Running in Docker or non-interactive mode - wait indefinitely
+        Console.WriteLine("Running in non-interactive mode. Press Ctrl+C to stop.");
+        await Task.Delay(-1);
+    }
+
+    private static async Task RunInteractiveModeAsync(IBot bot)
+    {
+        // Running locally with interactive console
+        Console.WriteLine("Press ESC or Q to quit.");
+        do
+        {
+            var keyInfo = Console.ReadKey();
+            if (keyInfo.Key is ConsoleKey.Escape or ConsoleKey.Q)
+            {
+                await bot.StopAsync();
+                return;
+            }
+        } while (true);
     }
 }
