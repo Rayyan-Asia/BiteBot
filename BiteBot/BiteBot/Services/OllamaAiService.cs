@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -29,11 +30,11 @@ public class OllamaAiService : IAiService
         {
             _logger.LogInformation("Sending prompt to Ollama AI model {Model}", Model);
 
-            var requestBody = new
+            var requestBody = new OllamaRequest
             {
-                model = Model,
-                prompt,
-                stream = false
+                Model = Model,
+                Prompt = prompt,
+                Stream = false
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -77,8 +78,24 @@ public class OllamaAiService : IAiService
 
     private class OllamaResponse
     {
+        [JsonPropertyName("response")]
         public string? Response { get; set; }
+
+        [JsonPropertyName("model")]
+        public string? Model { get; set; }
+        
+        [JsonPropertyName("done")]
         public bool Done { get; set; }
+    }
+
+    private class OllamaRequest
+    {
+        [JsonPropertyName("model")]
+        public string Model { get; set; }
+        [JsonPropertyName("prompt")]
+        public string Prompt { get; set; }
+        [JsonPropertyName("stream")]
+        public bool Stream { get; set; }
     }
 }
 
