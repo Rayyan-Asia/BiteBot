@@ -78,11 +78,11 @@ services:
       ollama:
         condition: service_healthy
     environment:
+      # Override connection strings to use Docker service names
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - DefaultConnection=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - OllamaUrl=${OllamaUrl}
-      - DiscordToken=${DiscordToken}
-      - GuildID=${GuildID}
+      # Override OllamaUrl to use Docker service name (not localhost)
+      - OllamaUrl=http://ollama:11434
     networks:
       - bitebot-network
 

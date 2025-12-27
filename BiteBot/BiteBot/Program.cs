@@ -17,6 +17,7 @@ internal abstract class Program
     private static async Task MainAsync(string[] _)
     {
         var configuration = new ConfigurationBuilder()
+            .AddEnvironmentVariables()
             .AddUserSecrets(Assembly.GetExecutingAssembly())
             .Build();
         
@@ -58,16 +59,30 @@ internal abstract class Program
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 await db.Database.MigrateAsync();
             }
-            do
+            
+            // Check if running in an interactive console (local development) or non-interactive (Docker)
+            if (Console.IsInputRedirected || !Environment.UserInteractive)
             {
-                var keyInfo = Console.ReadKey();
-                if (keyInfo.Key is ConsoleKey.Escape or ConsoleKey.Q)
+                // Running in Docker or non-interactive mode - wait indefinitely
+                Console.WriteLine("Running in non-interactive mode. Press Ctrl+C to stop.");
+                await Task.Delay(-1);
+            }
+            else
+            {
+                // Running locally with interactive console
+                Console.WriteLine("Press ESC or Q to quit.");
+                do
                 {
-                    await bot.StopAsync();
-                    return;
-                }
-            } while (true);
-        }catch(Exception ex)
+                    var keyInfo = Console.ReadKey();
+                    if (keyInfo.Key is ConsoleKey.Escape or ConsoleKey.Q)
+                    {
+                        await bot.StopAsync();
+                        return;
+                    }
+                } while (true);
+            }
+        }
+        catch(Exception ex)
         {
             Console.WriteLine(ex.Message);
             Environment.Exit(-1);
